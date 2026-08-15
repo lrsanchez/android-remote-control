@@ -1,0 +1,15 @@
+{
+  "KPlugin": {
+    "Id": "kwin-remote-input",
+    "Name": "Remote Input Handoff",
+    "Description": "Enter Android tablet mode when the cursor hits the left screen edge.",
+    "Version": "0.1.0",
+    "License": "MIT",
+    "EnabledByDefault": false
+  },
+  "X-KDE-Ordering": "60",
+  "X-KWin-Border-Activate": true,
+  "X-KWin-Exclude-Listing": false,
+  "X-Plasma-API": "javascript",
+  "KPackageStructure": "KWin/Script"
+}

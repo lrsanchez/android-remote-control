@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Tablet Control Tray
+Comment=Start the Android tablet control tray
+Exec=/var/home/leandro/Documents/dev/personal/android-remote-control/run-tray.sh
+Icon=tablet-control-tray
+Terminal=false
+Categories=Utility;
+StartupNotify=false
