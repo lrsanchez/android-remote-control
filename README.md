@@ -12,6 +12,11 @@ This project is built around a practical constraint: fully invisible/headless
 control was not reliable on this device, so the current working setup uses a
 small focusable helper window near the panel/tray.
 
+Host platform notes:
+
+- Linux/KDE Plasma: fully supported by this repo
+- Windows: partial support documented in `WINDOWS.md`
+
 ## What Works
 
 - Start tablet control from KDE without opening a terminal
@@ -20,6 +25,22 @@ small focusable helper window near the panel/tray.
 - Keep a small helper portal window near the bottom-right corner
 - Activate/deactivate through a tray icon
 - Optional KWin script for edge-triggered activation
+
+## Windows Hosts
+
+Windows host machines can use the same Android/Tailscale/ADB idea, but the
+current Linux-specific integrations do not carry over directly.
+
+See:
+
+- `WINDOWS.md`
+
+Summary:
+
+- `scrcpy` control works on Windows
+- Tailscale + wireless ADB works on Windows
+- KDE tray/KWin edge integration from this repo does not apply on Windows
+- a separate Windows tray app would be needed for a native equivalent
 
 ## Current Architecture
 
