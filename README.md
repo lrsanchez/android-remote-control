@@ -125,6 +125,18 @@ Or use the helper script:
 /var/home/leandro/Documents/dev/personal/android-remote-control/run-tray.sh
 ```
 
+## Help Page
+
+The tray menu includes a `Help` action which opens `HELP.md`.
+
+It documents:
+
+- daily use
+- reboot recovery
+- how to add a new tablet
+- how to switch between multiple tablets
+- recovery steps when activation fails
+
 ## Manual Manager Control
 
 Start the manager directly:
@@ -151,6 +163,39 @@ Check status:
 ```bash
 qdbus org.opencode.RemoteInput /RemoteInput org.opencode.RemoteInput.TabletActive
 ```
+
+## Adding Another Tablet
+
+For each new tablet:
+
+1. enable Developer Options
+2. enable `USB debugging`
+3. connect once by USB
+4. run:
+
+```bash
+adb tcpip 5555
+adb connect <tailscale-ip>:5555
+```
+
+5. in the tray:
+   - `Refresh Devices`
+   - `Select Device`
+   - choose the new tablet
+
+## Reboot Recovery
+
+After reboot, wireless ADB may need reconnection:
+
+```bash
+adb connect <tailscale-ip>:5555
+```
+
+Then:
+
+1. `Refresh Devices`
+2. re-select the tablet if needed
+3. `Activate Tablet`
 
 ## KWin Script
 

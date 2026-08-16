@@ -22,6 +22,7 @@ MANAGER_CMD = ["python3", str(ROOT / "client.py"), "--mode", "hid"]
 LOG_FILE = "/tmp/tablet-manager-hid.log"
 DEFAULT_SERIAL = "100.93.33.125:5555"
 ICON_NAME = "tablet-control-tray"
+HELP_FILE = ROOT / "HELP.md"
 
 
 class TrayApp:
@@ -78,6 +79,10 @@ class TrayApp:
         restart_item = Gtk.MenuItem(label="Restart Manager")
         restart_item.connect("activate", self.on_restart_manager)
         menu.append(restart_item)
+
+        help_item = Gtk.MenuItem(label="Help")
+        help_item.connect("activate", self.open_help)
+        menu.append(help_item)
 
         quit_item = Gtk.MenuItem(label="Quit Tray")
         quit_item.connect("activate", self.on_quit)
@@ -222,6 +227,9 @@ class TrayApp:
         self.rebuild_devices_menu()
         self.ensure_manager()
         self.refresh_status()
+
+    def open_help(self, _item):
+        subprocess.Popen(["xdg-open", str(HELP_FILE)])
 
     def on_quit(self, _item):
         Gtk.main_quit()
