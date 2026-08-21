@@ -10,8 +10,15 @@ $ShortcutPath = Join-Path $DesktopDir 'Tablet Control Tray.lnk'
 
 New-Item -ItemType Directory -Force -Path $Tools | Out-Null
 
+$PythonCmd = 'python'
+$PythonArgsPrefix = @()
+if (Get-Command py -ErrorAction SilentlyContinue) {
+    $PythonCmd = 'py'
+    $PythonArgsPrefix = @('-3')
+}
+
 Write-Host 'Installing Python dependencies...'
-python -m pip install -r $PythonReq
+& $PythonCmd @PythonArgsPrefix -m pip install -r $PythonReq
 
 if (-not (Test-Path $ScrcpyDir)) {
     $scrcpyZip = Join-Path $env:TEMP 'scrcpy-win64-v4.1.zip'

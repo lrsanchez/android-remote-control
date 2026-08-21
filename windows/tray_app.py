@@ -5,7 +5,9 @@ import os
 import subprocess
 import sys
 import threading
+import tkinter as tk
 from pathlib import Path
+from tkinter import messagebox, simpledialog
 
 import pystray
 from PIL import Image, ImageDraw
@@ -33,7 +35,7 @@ class TabletTray:
             "tablet-control-tray",
             self.build_icon(),
             "Tablet Control",
-            menu=pystray.Menu(self.status_item, self.device_menu, Item("Refresh Devices", self.refresh_devices), Item("Activate Tablet", self.activate_tablet), Item("Deactivate Tablet", self.deactivate_tablet), Item("Reconnect ADB", self.reconnect_adb), Item("Open Config Folder", self.open_config_folder), Item("Quit", self.quit_app)),
+            menu=pystray.Menu(self.status_item, self.device_menu, Item("Refresh Devices", self.refresh_devices), Item("Pair Device...", self.pair_device), Item("Set Device Address...", self.set_device_address), Item("Activate Tablet", self.activate_tablet), Item("Deactivate Tablet", self.deactivate_tablet), Item("Reconnect ADB", self.reconnect_adb), Item("Quit", self.quit_app)),
         )
 
     def load_config(self):
@@ -108,12 +110,17 @@ class TabletTray:
     def status_item(self):
         return Item(lambda _: self.current_status(), None, enabled=False)
 
+    def _select_handler(self, serial):
+        def handler(icon, item):
+            self.select_device(serial)
+        return handler
+
     @property
     def device_menu(self):
         def make_items():
             items = []
             for serial, label in self.adb_devices():
-                items.append(Item(label, lambda icon, item, s=serial: self.select_device(s), checked=lambda item, s=serial: self.config["selected_serial"] == s, radio=True))
+                items.append(Item(label, self._select_handler(serial), checked=lambda item, s=serial: self.config["selected_serial"] == s, radio=True))
             if not items:
                 items.append(Item("No ADB devices", None, enabled=False))
             return items
@@ -130,6 +137,9 @@ class TabletTray:
 
     def refresh_menu(self, *_args):
         self.icon.update_menu()
+
+    def refresh_devices(self, *_args):
+        self.refresh_menu()
 
     def activate_tablet(self, *_args):
         with self.lock:
@@ -148,10 +158,9 @@ class TabletTray:
                 "--keyboard=uhid",
                 "--mouse=uhid",
                 "--window-title=Tablet Portal",
-                "--window-borderless",
                 "--always-on-top",
-                "--window-x=1700",
-                "--window-y=900",
+                "--window-x=1482",
+                "--window-y=677",
                 "--window-width=154",
                 "--window-height=294",
                 "--max-size=336",
@@ -183,8 +192,127 @@ class TabletTray:
         subprocess.run([adb, "connect", serial], check=False)
         self.refresh_menu()
 
-    def open_config_folder(self, *_args):
-        os.startfile(str(APP_DIR))
+    def _force_foreground(self, hwnd):
+        # SetForegroundWindow alone is refused by Windows unless the calling
+        # thread currently "owns" user input focus, which the tray icon's
+        # background message-loop thread does not. AttachThreadInput lets our
+        # thread borrow that right from whichever thread currently has it.
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        fg_hwnd = user32.GetForegroundWindow()
+        fg_thread = user32.GetWindowThreadProcessId(fg_hwnd, None)
+        cur_thread = kernel32.GetCurrentThreadId()
+        attached = False
+        if fg_thread and fg_thread != cur_thread:
+            attached = bool(user32.AttachThreadInput(fg_thread, cur_thread, True))
+        try:
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(fg_thread, cur_thread, False)
+
+    def _dialog_root(self):
+        # A withdrawn root can't hand keyboard focus to its dialogs on Windows
+        # (background pythonw process + hidden owner window = no focus).
+        # Use an invisible-but-mapped window instead so it can be foregrounded.
+        root = tk.Tk()
+        root.attributes("-alpha", 0.0)
+        root.attributes("-topmost", True)
+        root.geometry("1x1+100+100")
+        root.update_idletasks()
+        root.lift()
+        root.focus_force()
+        try:
+            self._force_foreground(root.winfo_id())
+        except Exception:
+            pass
+        return root
+
+    def _run_dialog(self, fn):
+        # Run on a dedicated thread, not the tray icon's own message-loop
+        # thread: nesting Tk's event pump inside pystray's TrackPopupMenu
+        # call (which is still on the stack when a menu click fires) causes
+        # keyboard input to misroute even when the dialog visibly has focus.
+        result = {}
+
+        def worker():
+            result["value"] = fn()
+
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join()
+        return result.get("value")
+
+    def _prompt(self, title, message, initialvalue=None):
+        def fn():
+            root = self._dialog_root()
+            try:
+                return simpledialog.askstring(title, message, initialvalue=initialvalue, parent=root)
+            finally:
+                root.destroy()
+
+        return self._run_dialog(fn)
+
+    def _notify(self, title, message, is_error=False):
+        def fn():
+            root = self._dialog_root()
+            try:
+                if is_error:
+                    messagebox.showerror(title, message, parent=root)
+                else:
+                    messagebox.showinfo(title, message, parent=root)
+            finally:
+                root.destroy()
+
+        self._run_dialog(fn)
+
+    def pair_device(self, *_args):
+        pair_addr = self._prompt(
+            "Pair Device",
+            "Pairing address (ip:port) from the tablet's\n"
+            "Wireless debugging > Pair device with pairing code screen:",
+        )
+        if not pair_addr:
+            return
+        code = self._prompt("Pair Device", "6-digit pairing code shown on the tablet:")
+        if not code:
+            return
+
+        adb = self.config["adb_path"]
+        result = subprocess.run(
+            [adb, "pair", pair_addr.strip(), code.strip()],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode == 0 and "Successfully paired" in result.stdout:
+            self._notify("Pair Device", output or "Paired successfully.")
+        else:
+            self._notify("Pair Device", output or "Pairing failed.", is_error=True)
+        self.refresh_menu()
+
+    def set_device_address(self, *_args):
+        addr = self._prompt(
+            "Set Device Address",
+            "Device connect address (ip:port) from the tablet's\nWireless debugging screen:",
+            initialvalue=self.config["selected_serial"],
+        )
+        if not addr:
+            return
+        addr = addr.strip()
+        self.config["selected_serial"] = addr
+        self.save_config()
+
+        adb = self.config["adb_path"]
+        result = subprocess.run([adb, "connect", addr], capture_output=True, text=True, check=False)
+        output = (result.stdout + result.stderr).strip()
+        self._notify("Set Device Address", output or f"Set to {addr}")
+        self.deactivate_tablet()
+        self.refresh_menu()
 
     def quit_app(self, *_args):
         self.deactivate_tablet()
